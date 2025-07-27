@@ -1,11 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 import fastify from 'fastify'
-import fastifyMultipart, {MultipartValue, MultipartFields, MultipartFile } from '..'
-import * as util from 'util'
-import { pipeline } from 'stream'
-import * as fs from 'fs'
+import fastifyMultipart, { MultipartValue, MultipartFields, MultipartFile } from '..'
+import * as util from 'node:util'
+import { pipeline } from 'node:stream'
+import * as fs from 'node:fs'
 import { expectError, expectType } from 'tsd'
-import { FastifyErrorConstructor } from "@fastify/error"
-import { BusboyConfig, BusboyFileStream } from "@fastify/busboy";
+import { FastifyErrorConstructor } from '@fastify/error'
+import { BusboyConfig, BusboyFileStream } from '@fastify/busboy'
 
 const pump = util.promisify(pipeline)
 
@@ -13,49 +14,22 @@ const runServer = async () => {
   const app = fastify()
 
   app.register(fastifyMultipart, {
-    addToBody: true,
-    sharedSchemaId: 'sharedId',
-    throwFileSizeLimit: false,
-    // stream should be of type streams.Readable
-    // body should be of type fastifyMultipart.Record<string, BodyEntry>
-    onFile: (fieldName: string, stream: any, filename: string, encoding: string, mimetype: string, body: Record<string, any>) => {
-      console.log(fieldName, stream, filename, encoding, mimetype, body)
-    },
-    limits: {
-      fieldNameSize: 200,
-      fieldSize: 200,
-      fields: 200,
-      fileSize: 200,
-      files: 2,
-      headerPairs: 200
-    }
-  })
-
-  app.register(fastifyMultipart, {
+    preservePath: true, // field inherited from `BusboyConfig` interface
     attachFieldsToBody: true,
+    limits: {
+      parts: 500
+    },
     onFile: (part: MultipartFile) => {
       console.log(part)
     }
   })
 
-  app.get('/path', (request) => {
-    const isMultiPart = request.isMultipart()
-    request.multipart((field, file, filename, encoding, mimetype) => {
-      console.log(field, file, filename, encoding, mimetype, isMultiPart)
-    }, (err) => {
-      throw err
-    }, {
-      limits: {
-        fileSize: 10000
-      }
-    })
-  })
-
   // usage
   app.post('/', async (req, reply) => {
+    expectType<Promise<FormData>>(req.formData())
     const data = await req.file()
     if (data == null) throw new Error('missing file')
-    
+
     expectType<'file'>(data.type)
     expectType<BusboyFileStream>(data.file)
     expectType<boolean>(data.file.truncated)
@@ -64,8 +38,8 @@ const runServer = async () => {
     expectType<string>(data.filename)
     expectType<string>(data.encoding)
     expectType<string>(data.mimetype)
-    
-    const field = data.fields.myField;
+
+    const field = data.fields.myField
     if (field === undefined) {
       // field missing from the request
     } else if (Array.isArray(field)) {
@@ -75,7 +49,7 @@ const runServer = async () => {
       field.file.resume()
     } else {
       // field containing a value
-      field.fields.value;
+      field.fields.value
     }
 
     await pump(data.file, fs.createWriteStream(data.filename))
@@ -84,29 +58,38 @@ const runServer = async () => {
   })
 
   // Multiple fields including scalar values
-  app.post<{Body: {file: MultipartFile, foo: MultipartValue<string>}}>('/upload/stringvalue', async (req, reply) => {
-    expectError(req.body.foo.file);
+  app.post<{ Body: { file: MultipartFile, foo: MultipartValue<string> } }>('/upload/stringvalue', async (req, reply) => {
+    expectError(req.body.foo.file)
     expectType<'field'>(req.body.foo.type)
-    expectType<string>(req.body.foo.value);
+    expectType<string>(req.body.foo.value)
 
     expectType<BusboyFileStream>(req.body.file.file)
-    expectType<'file'>(req.body.file.type);
-    reply.send();
+    expectType<'file'>(req.body.file.type)
+    reply.send()
   })
 
-  app.post<{Body: {file: MultipartFile, num: MultipartValue<number>}}>('/upload/stringvalue', async (req, reply) => {
-    expectType<number>(req.body.num.value);
-    reply.send();
+  app.post<{ Body: { file: MultipartFile, num: MultipartValue<number> } }>('/upload/stringvalue', async (req, reply) => {
+    expectType<number>(req.body.num.value)
+    reply.send()
 
     // file is a file
     expectType<BusboyFileStream>(req.body.file.file)
-    expectError(req.body.file.value);
+    expectError(req.body.file.value)
   })
 
   // busboy
   app.post('/', async function (req, reply) {
-    const options: Partial<BusboyConfig> = { limits: { fileSize: 1000 } };
-    const data = await req.file(options)
+    const data = await req.file({
+      limits: { fileSize: 1000, parts: 500 },
+      throwFileSizeLimit: true,
+      sharedSchemaId: 'schemaId',
+      isPartAFile: (fieldName, contentType, fileName) => {
+        expectType<string | undefined>(fieldName)
+        expectType<string | undefined>(contentType)
+        expectType<string | undefined>(fileName)
+        return true
+      }
+    })
     if (!data) throw new Error('missing file')
     await pump(data.file, fs.createWriteStream(data.filename))
     reply.send()
@@ -114,7 +97,17 @@ const runServer = async () => {
 
   // handle multiple file streams
   app.post('/', async (req, reply) => {
-    const parts = req.files()
+    const parts = req.files({
+      limits: { fileSize: 1000, parts: 500 },
+      throwFileSizeLimit: true,
+      sharedSchemaId: 'schemaId',
+      isPartAFile: (fieldName, contentType, fileName) => {
+        expectType<string | undefined>(fieldName)
+        expectType<string | undefined>(contentType)
+        expectType<string | undefined>(fileName)
+        return true
+      }
+    })
     for await (const part of parts) {
       await pump(part.file, fs.createWriteStream(part.filename))
     }
@@ -138,7 +131,7 @@ const runServer = async () => {
   app.post('/upload/raw/any', async function (req, reply) {
     const data = await req.file()
     if (!data) throw new Error('missing file')
-    const buffer = await data.toBuffer()
+    expectType<Buffer>(await data.toBuffer())
     // upload to S3
     reply.send()
   })
@@ -160,30 +153,30 @@ const runServer = async () => {
 
   // upload files to disk with busboy options
   app.post('/upload/files', async function (req, reply) {
-    const options: Partial<BusboyConfig> = { limits: { fileSize: 1000 } };
+    const options: Partial<BusboyConfig> = { limits: { fileSize: 1000 } }
     await req.saveRequestFiles(options)
 
     reply.send()
   })
 
   // access all errors
-  app.post('/upload/files', async function (req, reply) {
+  app.post('/upload/files', async function (_req, reply) {
     const { FilesLimitError } = app.multipartErrors
 
-    expectType<FastifyErrorConstructor>(app.multipartErrors.FieldsLimitError);
-    expectType<FastifyErrorConstructor>(app.multipartErrors.FilesLimitError);
-    expectType<FastifyErrorConstructor>(app.multipartErrors.InvalidMultipartContentTypeError);
-    expectType<FastifyErrorConstructor>(app.multipartErrors.PartsLimitError);
-    expectType<FastifyErrorConstructor>(app.multipartErrors.PrototypeViolationError);
-    expectType<FastifyErrorConstructor>(app.multipartErrors.RequestFileTooLargeError);
+    expectType<FastifyErrorConstructor>(app.multipartErrors.FieldsLimitError)
+    expectType<FastifyErrorConstructor>(app.multipartErrors.FilesLimitError)
+    expectType<FastifyErrorConstructor>(app.multipartErrors.InvalidMultipartContentTypeError)
+    expectType<FastifyErrorConstructor>(app.multipartErrors.PartsLimitError)
+    expectType<FastifyErrorConstructor>(app.multipartErrors.PrototypeViolationError)
+    expectType<FastifyErrorConstructor>(app.multipartErrors.RequestFileTooLargeError)
 
     // test instanceof Error
-    const a = new FilesLimitError();
+    const a = new FilesLimitError()
     if (a instanceof FilesLimitError) {
-      console.log("FilesLimitError occurred.");
+      console.log('FilesLimitError occurred.')
     }
 
-    reply.send();
+    reply.send()
   })
 
   await app.ready()

@@ -1,35 +1,30 @@
-import { Busboy, BusboyConfig, BusboyFileStream } from "@fastify/busboy";
-import { FastifyPluginCallback, FastifyRequest } from "fastify";
-import { Readable } from "stream";
-import { FastifyErrorConstructor } from "@fastify/error";
+import { BusboyConfig, BusboyFileStream } from '@fastify/busboy'
+import { FastifyPluginCallback, FastifyRequest } from 'fastify'
+import { Readable } from 'node:stream'
+import { FastifyErrorConstructor } from '@fastify/error'
 
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyRequest {
     isMultipart: () => boolean;
 
+    formData: () => Promise<FormData>;
+
     // promise api
     parts: (
-      options?: Omit<BusboyConfig, "headers">
+      options?: Omit<BusboyConfig, 'headers'>
     ) => AsyncIterableIterator<fastifyMultipart.Multipart>;
-
-    // legacy
-    multipart: (
-      handler: MultipartHandler,
-      next: (err: Error) => void,
-      options?: Omit<BusboyConfig, "headers">
-    ) => Busboy;
 
     // Stream mode
     file: (
-      options?: Omit<BusboyConfig, "headers">
+      options?: Omit<BusboyConfig, 'headers'> | fastifyMultipart.FastifyMultipartBaseOptions
     ) => Promise<fastifyMultipart.MultipartFile | undefined>;
     files: (
-      options?: Omit<BusboyConfig, "headers">
+      options?: Omit<BusboyConfig, 'headers'> | fastifyMultipart.FastifyMultipartBaseOptions
     ) => AsyncIterableIterator<fastifyMultipart.MultipartFile>;
 
     // Disk mode
     saveRequestFiles: (
-      options?: Omit<BusboyConfig, "headers"> & { tmpdir?: string }
+      options?: Omit<BusboyConfig, 'headers'> & { tmpdir?: string }
     ) => Promise<Array<fastifyMultipart.SavedMultipartFile>>;
     cleanRequestFiles: () => Promise<void>;
     tmpUploads: Array<string> | null;
@@ -43,18 +38,10 @@ declare module "fastify" {
 }
 
 type FastifyMultipartPlugin = FastifyPluginCallback<
-  | fastifyMultipart.FastifyMultipartBaseOptions
-  | fastifyMultipart.FastifyMultipartOptions
-  | fastifyMultipart.FastifyMultipartAttachFieldsToBodyOptions
->;
-
-type MultipartHandler = (
-  field: string,
-  file: BusboyFileStream,
-  filename: string,
-  encoding: string,
-  mimetype: string
-) => void;
+| fastifyMultipart.FastifyMultipartBaseOptions
+| fastifyMultipart.FastifyMultipartOptions
+| fastifyMultipart.FastifyMultipartAttachFieldsToBodyOptions
+>
 
 interface BodyEntry {
   data: Buffer;
@@ -81,7 +68,7 @@ declare namespace fastifyMultipart {
     filepath: string;
   }
 
-  export type Multipart = MultipartFile | MultipartValue;
+  export type Multipart = MultipartFile | MultipartValue
 
   export interface MultipartFile {
     type: 'file';
@@ -109,12 +96,7 @@ declare namespace fastifyMultipart {
     [fieldname: string]: Multipart | Multipart[] | undefined;
   }
 
-  export interface FastifyMultipartBaseOptions {
-    /**
-     * Append the multipart parameters to the body object
-     */
-    addToBody?: boolean;
-
+  export interface FastifyMultipartBaseOptions extends Partial<BusboyConfig> {
     /**
      * Add a shared schema to validate the input fields
      */
@@ -170,6 +152,12 @@ declare namespace fastifyMultipart {
        * Max number of header key=>value pairs
        */
       headerPairs?: number;
+
+      /**
+       * For multipart forms, the max number of parts (fields + files)
+       * @default 1000
+       */
+      parts?: number;
     };
   }
 
@@ -197,7 +185,7 @@ declare namespace fastifyMultipart {
     /**
      * Only valid in the promise api. Append the multipart parameters to the body object.
      */
-    attachFieldsToBody: true | "keyValues";
+    attachFieldsToBody: true | 'keyValues';
 
     /**
      * Manage the file stream like you need
@@ -208,13 +196,13 @@ declare namespace fastifyMultipart {
   /**
    * Adds a new type `isFile` to help @fastify/swagger generate the correct schema.
    */
-  export function ajvFilePlugin(ajv: any): void;
+  export function ajvFilePlugin (ajv: any): void
 
-  export const fastifyMultipart: FastifyMultipartPlugin;
-  export { fastifyMultipart as default };
+  export const fastifyMultipart: FastifyMultipartPlugin
+  export { fastifyMultipart as default }
 }
-declare function fastifyMultipart(
+declare function fastifyMultipart (
   ...params: Parameters<FastifyMultipartPlugin>
-): ReturnType<FastifyMultipartPlugin>;
+): ReturnType<FastifyMultipartPlugin>
 
-export = fastifyMultipart;
+export = fastifyMultipart

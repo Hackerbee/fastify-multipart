@@ -4,13 +4,13 @@ const test = require('tap').test
 const FormData = require('form-data')
 const Fastify = require('fastify')
 const multipart = require('..')
-const http = require('http')
-const crypto = require('crypto')
+const http = require('node:http')
+const crypto = require('node:crypto')
 const { Readable } = require('readable-stream')
-const path = require('path')
-const fs = require('fs')
-const { access } = require('fs').promises
-const EventEmitter = require('events')
+const path = require('node:path')
+const fs = require('node:fs')
+const { access } = require('node:fs').promises
+const EventEmitter = require('node:events')
 const { once } = EventEmitter
 
 const filePath = path.join(__dirname, '../README.md')
@@ -42,7 +42,7 @@ test('should store file on disk, remove on response', async function (t) {
   const ee = new EventEmitter()
 
   // ensure that file is removed after response
-  fastify.addHook('onResponse', async (request, reply) => {
+  fastify.addHook('onResponse', async (request) => {
     try {
       await access(request.tmpUploads[0], fs.constants.F_OK)
     } catch (error) {
@@ -84,7 +84,7 @@ test('should store file on disk, remove on response error', async function (t) {
 
   fastify.register(multipart)
 
-  fastify.post('/', async function (req, reply) {
+  fastify.post('/', async function (req) {
     t.ok(req.isMultipart())
 
     await req.saveRequestFiles()
@@ -95,7 +95,7 @@ test('should store file on disk, remove on response error', async function (t) {
   const ee = new EventEmitter()
 
   // ensure that file is removed after response
-  fastify.addHook('onResponse', async (request, reply) => {
+  fastify.addHook('onResponse', async (request) => {
     try {
       await access(request.tmpUploads[0], fs.constants.F_OK)
     } catch (error) {
@@ -195,7 +195,7 @@ test('should throw on file save error', async function (t) {
     try {
       await req.saveRequestFiles({ tmpdir: 'something' })
       reply.code(200).send()
-    } catch (error) {
+    } catch {
       reply.code(500).send()
     }
   })
@@ -246,7 +246,7 @@ test('should not throw on request files cleanup error', { skip: process.platform
       // temp file saved, remove before the onResponse hook
       await fs.promises.rm(tmpdir, { recursive: true, force: true })
       reply.code(200).send()
-    } catch (error) {
+    } catch {
       reply.code(500).send()
     }
   })
@@ -363,7 +363,7 @@ test('should store file on disk, remove on response error, serial', async functi
 
   fastify.register(multipart)
 
-  fastify.post('/', async function (req, reply) {
+  fastify.post('/', async function (req) {
     t.equal(req.tmpUploads, null)
 
     await req.saveRequestFiles()
@@ -375,7 +375,7 @@ test('should store file on disk, remove on response error, serial', async functi
   const ee = new EventEmitter()
 
   // ensure that file is removed after response
-  fastify.addHook('onResponse', async (request, reply) => {
+  fastify.addHook('onResponse', async (request) => {
     try {
       await access(request.tmpUploads[0], fs.constants.F_OK)
     } catch (error) {
@@ -429,7 +429,7 @@ test('should process large files correctly', async function (t) {
 
   fastify.register(multipart)
 
-  fastify.post('/', async function (req, reply) {
+  fastify.post('/', async function (req) {
     t.ok(req.isMultipart())
     await req.saveRequestFiles()
     return { ok: true }

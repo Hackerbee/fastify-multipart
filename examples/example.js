@@ -1,16 +1,16 @@
 'use strict'
 
 const fastify = require('fastify')()
-const fs = require('fs')
-const util = require('util')
-const path = require('path')
-const { pipeline } = require('stream')
+const fs = require('node:fs')
+const util = require('node:util')
+const path = require('node:path')
+const { pipeline } = require('node:stream')
 const pump = util.promisify(pipeline)
 const form = path.join(__dirname, '..', 'form.html')
 
 fastify.register(require('..'))
 
-fastify.get('/', function (req, reply) {
+fastify.get('/', function (_req, reply) {
   reply.type('text/html').send(fs.createReadStream(form))
 })
 

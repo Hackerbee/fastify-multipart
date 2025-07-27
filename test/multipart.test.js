@@ -1,18 +1,18 @@
 'use strict'
 
-const util = require('util')
+const util = require('node:util')
 const test = require('tap').test
 const FormData = require('form-data')
 const Fastify = require('fastify')
 const multipart = require('..')
-const http = require('http')
-const path = require('path')
-const fs = require('fs')
+const http = require('node:http')
+const path = require('node:path')
+const fs = require('node:fs')
 const concat = require('concat-stream')
-const stream = require('stream')
-const { once } = require('events')
+const stream = require('node:stream')
+const { once } = require('node:events')
 const pump = util.promisify(stream.pipeline)
-const sendToWormhole = require('stream-wormhole')
+const streamToNull = require('../lib/stream-consumer')
 
 const filePath = path.join(__dirname, '../README.md')
 
@@ -89,7 +89,7 @@ test('should respond when all files are processed', function (t) {
     for await (const part of parts) {
       t.ok(part.file)
       t.equal(part.type, 'file')
-      await sendToWormhole(part.file)
+      await streamToNull(part.file)
     }
     reply.code(200).send()
   })
@@ -141,7 +141,7 @@ test('should group parts with the same name to an array', function (t) {
         t.pass('multiple files are grouped by array')
       }
       if (part.file) {
-        await sendToWormhole(part.file)
+        await streamToNull(part.file)
       }
     }
     reply.code(200).send()
@@ -270,7 +270,7 @@ test('should throw error due to filesLimit (The max number of file fields (Defau
       const parts = req.files({ limits: { files: 1 } })
       for await (const part of parts) {
         t.ok(part.file, 'part received')
-        await sendToWormhole(part.file)
+        await streamToNull(part.file)
       }
       reply.code(200).send()
     } catch (error) {
@@ -330,7 +330,7 @@ test('should be able to configure limits globally with plugin register options',
       for await (const part of parts) {
         t.ok(part.file)
         t.equal(part.type, 'file')
-        await sendToWormhole(part.file)
+        await streamToNull(part.file)
       }
       reply.code(200).send()
     } catch (error) {
@@ -485,7 +485,7 @@ test('should throw error due to file size limit exceed (Default: true)', functio
       for await (const part of parts) {
         t.ok(part.file)
         t.equal(part.type, 'file')
-        await sendToWormhole(part.file)
+        await streamToNull(part.file)
       }
       reply.code(200).send()
     } catch (error) {
@@ -532,7 +532,7 @@ test('should not throw error due to file size limit exceed - files setting (Defa
     for await (const part of parts) {
       t.ok(part.file)
       t.equal(part.type, 'file')
-      await sendToWormhole(part.file)
+      await streamToNull(part.file)
     }
     reply.code(200).send()
   })
@@ -633,4 +633,59 @@ test('should not miss fields if part handler takes much time than formdata parsi
   res.resume()
   await once(res, 'end')
   t.pass('res ended successfully')
+})
+
+test('should not freeze when error is thrown during processing', async function (t) {
+  t.plan(2)
+  const app = Fastify()
+
+  app
+    .register(multipart)
+
+  app
+    .post('/', async (request) => {
+      const files = request.files()
+
+      for await (const { file } of files) {
+        try {
+          const storage = new stream.Writable({
+            write (_chunk, _encoding, callback) {
+            // trigger error:
+              callback(new Error('write error'))
+            }
+          })
+
+          await pump(file, storage)
+        } catch {}
+      }
+
+      return { message: 'done' }
+    })
+
+  await app.listen()
+
+  const { port } = app.server.address()
+
+  const form = new FormData()
+  const opts = {
+    hostname: '127.0.0.1',
+    port,
+    path: '/',
+    headers: form.getHeaders(),
+    method: 'POST'
+  }
+  const req = http.request(opts)
+
+  try {
+    form.append('upload', fs.createReadStream(filePath))
+    form.pipe(req)
+  } catch {}
+
+  const [res] = await once(req, 'response')
+  t.equal(res.statusCode, 200)
+  res.resume()
+  await once(res, 'end')
+  t.pass('res ended successfully!')
+
+  await app.close()
 })

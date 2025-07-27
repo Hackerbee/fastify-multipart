@@ -4,11 +4,11 @@ const test = require('tap').test
 const FormData = require('form-data')
 const Fastify = require('fastify')
 const multipart = require('..')
-const http = require('http')
-const crypto = require('crypto')
+const http = require('node:http')
+const crypto = require('node:crypto')
 const { Readable } = require('readable-stream')
-const sendToWormhole = require('stream-wormhole')
-const EventEmitter = require('events')
+const streamToNull = require('../lib/stream-consumer')
+const EventEmitter = require('node:events')
 const { once } = EventEmitter
 
 test('should emit fileSize limitation error during streaming', async function (t) {
@@ -23,7 +23,7 @@ test('should emit fileSize limitation error during streaming', async function (t
   fastify.post('/', async function (req, reply) {
     t.ok(req.isMultipart())
     const part = await req.file({ limits: { fileSize: 16500 } })
-    await sendToWormhole(part.file)
+    await streamToNull(part.file)
     if (part.file.truncated) {
       reply.code(500).send()
     } else {
